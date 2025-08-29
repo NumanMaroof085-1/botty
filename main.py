@@ -8,8 +8,8 @@ def get_binance_client():
     Creates and returns an authenticated Binance Client instance connected to the TESTNET.
     Reads API keys from environment variables.
     """
-    api_key = os.environ.get('BINANCE_TESTNET_API_KEY')
-    api_secret = os.environ.get('BINANCE_TESTNET_SECRET_KEY')
+    api_key = "D7jUfM1q8pzN8403xK6NiRKdJKifJXWUB1SeodY1R4H8LcEIABUtJxUwNvJ1100I"
+    api_secret = "odgBguZ8VUIkF6ahADOVpfOgPWBtwS3psjGeIkmvu7pwtnPA0yR46Puo2ztCCI52"
 
     if not api_key or not api_secret:
         raise ValueError("Could not find Binance API keys in environment variables. "
@@ -289,3 +289,4 @@ print("Starting Channel Breakout Bot...")
 while True:
     execute_strategy()
     time.sleep(5)  #Check every 5 seconds
+
