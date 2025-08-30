@@ -1,8 +1,11 @@
 # binance_client.py
 from binance.client import Client
 import pandas as pd
+import requests
 import os
 
+
+api_key_live = ""  # from Binance app
 def get_binance_client():
     """
     Creates and returns an authenticated Binance Client instance connected to the TESTNET.
@@ -18,44 +21,55 @@ def get_binance_client():
     # The 'testnet=True' flag is crucial to point to the testnet environment
     return Client(api_key, api_secret, testnet=True)
 
-def fetch_klines(symbol, interval, limit=500):
+def fetch_live_klines(symbol, interval, limit=500, api_key_live=None):
     """
-    Fetches historical kline (OHLCV) data from Binance and returns a cleaned pandas DataFrame.
+    Fetches live kline (OHLCV) data from Binance using a live account API key
+    and returns a cleaned pandas DataFrame.
 
     Args:
-        symbol (str): The trading symbol (e.g., 'BTCUSDT')
-        interval (str): The kline interval (e.g., '1m', '5m', '1h')
-        limit (int): The number of candles to fetch (max 1000)
+        symbol (str): Trading symbol, e.g., 'BTCUSDT'
+        interval (str): Kline interval, e.g., '1m', '5m', '1h'
+        limit (int): Number of candles to fetch (max 1000)
+        api_key (str): Your Binance API key
 
     Returns:
         pd.DataFrame: DataFrame with columns ['timestamp', 'open', 'high', 'low', 'close', 'volume']
     """
-    client = get_binance_client()
+    
+    url = "https://api.binance.com/api/v3/klines"
+    params = {
+        "symbol": symbol.upper(),
+        "interval": interval,
+        "limit": limit
+    }
+    headers = {}
+    if api_key_live:
+        headers["X-MBX-APIKEY"] = api_key_live
 
-    # Fetch the raw klines data from Binance
-    klines = client.get_klines(symbol=symbol, interval=interval, limit=limit)
+    response = requests.get(url, headers=headers, params=params)
+    response.raise_for_status()  # Raise error if request failed
+    klines = response.json()
 
-    # Define the column names for the DataFrame
+    # Create DataFrame
     columns = [
         'timestamp', 'open', 'high', 'low', 'close', 'volume',
         'close_time', 'quote_asset_volume', 'number_of_trades',
         'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
     ]
-
-    # Create the DataFrame
     df = pd.DataFrame(klines, columns=columns)
 
-    # Convert relevant columns to numeric types
-    numeric_columns = ['open', 'high', 'low', 'close', 'volume']
-    for col in numeric_columns:
+    # Convert relevant columns to numeric
+    for col in ['open', 'high', 'low', 'close', 'volume']:
         df[col] = pd.to_numeric(df[col])
 
-    # Convert timestamp to a readable datetime format
-    # Correct conversion to match chart timezone
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms').dt.tz_localize('UTC').dt.tz_convert('Asia/Karachi')
+    # Convert timestamp to datetime in Pakistan timezone
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms') \
+                        .dt.tz_localize('UTC') \
+                        .dt.tz_convert('Asia/Karachi')
 
-    # Return only the essential columns for trading analysis
+    # Return only essential columns
     return df[['timestamp', 'open', 'high', 'low', 'close', 'volume']]
+
 
 # strategy.py
 def generate_signal(dataframe, length=1):
@@ -107,7 +121,7 @@ def generate_signal(dataframe, length=1):
         return "HOLD"
 
 # risk_management.py
-from binance_client import get_binance_client
+# from binance_client import get_binance_client
 
 def get_account_balance():
     """Gets your current USDT balance."""
@@ -150,7 +164,7 @@ def calculate_position_size():
     """
     Fixed quantity trading - no calculations needed
     """
-    return 0.01  # Same as FIXED_QUANTITY in executor.py
+    return 0.8  # Same as FIXED_QUANTITY in executor.py
 
 # executor.py
 import time
@@ -218,7 +232,7 @@ def execute_trade(signal):
     client = get_binance_client()
     
     # Get dynamically calculated position size
-    quantity = calculate_position_size1()
+    quantity = calculate_position_size()
     
     try:
         if signal == "BUY":
@@ -256,9 +270,9 @@ def execute_strategy():
     has_position = position_size > 0
     
     # 2. Get market data and generate signal
-    from binance_client import fetch_klines
+    # from binance_client import fetch_klines
     try:
-        data = fetch_klines(SYMBOL, TIMEFRAME, limit=100)
+        data = fetch_live_klines(SYMBOL, TIMEFRAME, limit=100, api_key_live=api_key_live)
         signal = generate_signal(data, LENGTH)
     except Exception as e:
         print(f"✗ Error fetching data: {e}")
@@ -273,7 +287,7 @@ def execute_strategy():
             cancel_all_orders(SYMBOL)
             if close_position(position_size, current_side):
                 print("Waiting for position closure...")
-                time.sleep(2)  # Brief pause for order to process
+                # time.sleep(2)  # Brief pause for order to process
             return
         else:
             print("Holding existing position")
@@ -288,5 +302,5 @@ def execute_strategy():
 print("Starting Channel Breakout Bot...")
 while True:
     execute_strategy()
-    time.sleep(5)  #Check every 5 seconds
+    time.sleep(3)  #Check every 5 seconds
 
